@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PISCI MONITOR</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    
+    <style>
+        /* --- ESQUEMA DE CORES (PRETO, BRANCO, AMARELO) --- */
+        :root {
+            --color-bg: #1a1a1a;         /* Preto (Fundo) */
+            --color-surface: #ffffff;    /* Branco (Superfície dos gráficos) */
+            --color-accent: #ffd700;     /* Amarelo (Botões, detalhes) */
+            --color-text-primary: #f0f0f0; /* Texto principal (em fundos escuros) */
+            --color-text-secondary: #333;  /* Texto secundário (em fundos claros) */
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            background-color: var(--color-bg);
+            color: var(--color-text-primary);
+        }
+
+        /* --- CABEÇALHO COM LOGO --- */
+        header {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            padding: 1.5rem 2rem;
+            border-bottom: 2px solid var(--color-accent);
+        }
+
+        header img {
+            height: 60px; /* Ajuste a altura da sua logo */
+            width: auto;
+            /* ####################################################### */
+            /* ### CORREÇÃO AQUI: INVERTER CORES DA LOGO ### */
+            filter: invert(1); /* Transforma o preto em branco (ou quase) */
+            /* ####################################################### */
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 1.8rem;
+        }
+
+        /* --- CONTROLES (BOTÃO E STATUS) --- */
+        .controls {
+            padding: 1.5rem 2rem;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap; /* Permite que os itens quebrem linha em telas menores */
+        }
+
+        #refresh-button {
+            background-color: var(--color-accent);
+            color: var(--color-text-secondary);
+            border: none;
+            padding: 12px 20px;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        #refresh-button:hover {
+            background-color: #e6c000; /* Amarelo um pouco mais escuro */
+        }
+
+        .status-box {
+            font-size: 0.9em;
+            color: #ccc;
+            min-height: 1.2em;
+        }
+        #status-error { color: #ff6b6b; font-weight: bold; }
+        #status-update { color: #69f0ae; }
+
+        /* --- GRID DOS GRÁFICOS --- */
+        main {
+            display: grid;
+            /* ####################################################### */
+            /* ### CORREÇÃO AQUI: GRID 2x2 ### */
+            grid-template-columns: repeat(2, 1fr); /* 2 colunas de tamanho igual */
+            gap: 20px;
+            padding: 0 2rem 2rem 2rem;
+        }
+        /* Ajuste para telas menores (responsividade) */
+        @media (max-width: 900px) {
+            main {
+                grid-template-columns: 1fr; /* 1 coluna em telas menores que 900px */
+            }
+        }
+
+        .chart-container {
+            background: var(--color-surface);
+            color: var(--color-text-secondary);
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <img id="logo" src="usina_logo.png" alt="Usina do Conhecimento Logo">
+        <h1>Monitoramento de Sensores (Últimas 24h)</h1>
+    </header>
+
+    <div class="controls">
+        <button id="refresh-button">Atualizar Medidas</button>
+        <div class="status-box">
+            <span id="status-loading"></span>
+            <span id="status-update"></span>
+            <span id="status-error"></span>
+        </div>
+    </div>
+
+    <main class="chart-grid">
+        <div class="chart-container">
+            <h2>Potencial Hidrogeniônico (pH)</h2>
+            <canvas id="phChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h2>Potencial de Oxi-Redução (ORP)</h2>
+            <canvas id="orpChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h2>Oxigênio Dissolvido (OD)</h2>
+            <canvas id="doChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h2>Temperatura</h2>
+            <canvas id="tempChart"></canvas>
+        </div>
+    </main>
+
+
+    <script>
+        // ==========================================================
+        // ### CONFIGURE AQUI ###
+        // ==========================================================
+        
+        const ttnCluster = "au1.cloud.thethings.network"; 
+        const appID = "lora-water-station-usina"; 
+        const deviceID = "lora-water-station-usina";
+        const ttnToken = "NNSXS.GH673VT25XBDSSELMK2UXPARETCB6AZI2KWTOLA.ZYR54W6YJAEVZYP25CGKD54D2Z7OZEVV67I3YCAB6GQL3ZJW5EXA";
+
+        // ==========================================================
+        // ### LÓGICA DO GRÁFICO ###
+        // ==========================================================
+
+        // --- Pega os elementos de UI ---
+        const refreshButton = document.getElementById('refresh-button');
+        const statusLoading = document.getElementById('status-loading');
+        const statusUpdate = document.getElementById('status-update');
+        const statusError = document.getElementById('status-error');
+
+        // --- Função Helper para criar Opções de Gráfico ---
+        function createChartOptions(yAxisTitle) {
+            return {
+                scales: {
+                    x: {
+                        type: 'time',
+                        time: { unit: 'hour', displayFormats: { hour: 'HH:mm' } },
+                        title: { display: true, text: 'Horário' }
+                    },
+                    y: { 
+                        title: { display: true, text: yAxisTitle },
+                        beginAtZero: false 
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false 
+                    }
+                }
+            };
+        }
+
+        // --- Inicializa os 4 Gráficos ---
+
+        // Gráfico 1: pH
+        const phChart = new Chart(document.getElementById('phChart').getContext('2d'), {
+            type: 'line',
+            data: { 
+                datasets: [{ 
+                    label: 'pH', 
+                    data: [], 
+                    borderColor: 'rgba(255, 99, 132, 1)', 
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    borderWidth: 2, 
+                    fill: false 
+                }] 
+            },
+            options: createChartOptions('Valor pH')
+        });
+
+        // Gráfico 2: ORP
+        const orpChart = new Chart(document.getElementById('orpChart').getContext('2d'), {
+            type: 'line',
+            data: { 
+                datasets: [{ 
+                    label: 'ORP (mV)', 
+                    data: [], 
+                    borderColor: 'rgba(54, 162, 235, 1)', 
+                    backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                    borderWidth: 2, 
+                    fill: false 
+                }] 
+            },
+            options: createChartOptions('ORP (mV)')
+        });
+
+        // Gráfico 3: Oxigênio Dissolvido (OD)
+        const doChart = new Chart(document.getElementById('doChart').getContext('2d'), {
+            type: 'line',
+            data: { 
+                datasets: [{ 
+                    label: 'Oxigênio (mg/L)', 
+                    data: [], 
+                    borderColor: 'rgba(75, 192, 192, 1)', 
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderWidth: 2, 
+                    fill: false 
+                }] 
+            },
+            options: createChartOptions('Oxigênio (mg/L)')
+        });
+
+        // Gráfico 4: Temperatura
+        const tempChart = new Chart(document.getElementById('tempChart').getContext('2d'), {
+            type: 'line',
+            data: { 
+                datasets: [{ 
+                    label: 'Temperatura (°C)', 
+                    data: [], 
+                    borderColor: 'rgba(255, 159, 64, 1)', 
+                    backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                    borderWidth: 2, 
+                    fill: false 
+                }] 
+            },
+            options: createChartOptions('Temperatura (°C)')
+        });
+
+
+        // --- Função de busca de dados ---
+        async function fetchData() {
+            statusLoading.textContent = "Carregando dados...";
+            statusUpdate.textContent = "";
+            statusError.textContent = "";
+            
+            const url = `https://${ttnCluster}/api/v3/as/applications/${appID}/devices/${deviceID}/packages/storage/uplink_message?last=24h`;
+
+            try {
+                const response = await fetch(url, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${ttnToken}`, 'Accept': 'text/event-stream' }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Falha na API da TTN (${response.statusText})`);
+                }
+
+                const rawData = await response.text();
+                
+                // Prepara os arrays de dados para cada gráfico
+                const phPoints = [];
+                const orpPoints = [];
+                const doPoints = [];
+                const tempPoints = [];
+
+                const lines = rawData.trim().split('\n');
+                let pointsLoaded = 0;
+                
+                for (const line of lines) {
+                    if (line.trim()) {
+                        try { // Adicionado bloco try-catch para lidar com JSONs malformados
+                            const jsonData = JSON.parse(line);
+                            const uplink = jsonData.result;
+
+                            if (uplink && uplink.uplink_message && uplink.uplink_message.decoded_payload) {
+                                const payload = uplink.uplink_message.decoded_payload;
+                                const time = new Date(uplink.received_at);
+                                
+                                if (payload.hasOwnProperty('ph_value')) {
+                                    phPoints.push({ x: time, y: payload.ph_value });
+                                    orpPoints.push({ x: time, y: payload.orp_value });
+                                    doPoints.push({ x: time, y: payload.do_value });
+                                    tempPoints.push({ x: time, y: payload.temperature });
+                                    pointsLoaded++;
+                                }
+                            }
+                        } catch (jsonError) {
+                            console.warn("Erro ao fazer parse de linha JSON:", jsonError, "Linha:", line);
+                            // Continua para a próxima linha se houver um erro de parse
+                        }
+                    }
+                }
+                
+                // Atualiza os 4 gráficos com seus respectivos dados
+                phChart.data.datasets[0].data = phPoints;
+                phChart.update();
+                
+                orpChart.data.datasets[0].data = orpPoints;
+                orpChart.update();
+
+                doChart.data.datasets[0].data = doPoints;
+                doChart.update();
+
+                tempChart.data.datasets[0].data = tempPoints;
+                tempChart.update();
+
+                // Atualiza o status
+                statusLoading.textContent = "";
+                const now = new Date();
+                statusUpdate.textContent = `Gráfico atualizado com ${pointsLoaded} pontos. (Última verificação: ${now.toLocaleTimeString()})`;
+
+            } catch (error) {
+                console.error('Erro ao buscar dados:', error);
+                statusLoading.textContent = "";
+                statusError.textContent = `Erro: ${error.message}. Tentando novamente em 60s.`;
+            }
+        }
+
+        // --- Event Listeners ---
+        
+        // Conecta o botão de atualizar
+        refreshButton.addEventListener('click', fetchData);
+
+        // Busca dados na primeira carga
+        fetchData(); 
+        
+        // Continua atualizando a cada 60 segundos
+        setInterval(fetchData, 60000); 
+    </script>
+</body>
+</html>
