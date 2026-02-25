@@ -230,8 +230,16 @@
                     fill: false 
                 }] 
             },
-            options: createChartOptions('Oxigênio (mg/L)')
-        });
+            options: { 
+				scales: { 
+					y: { 
+						min: 0,
+						max: 10, 
+						} 
+						}
+				createChartOptions('Oxigênio (mg/L)')	
+						}
+			        });
 
         // Gráfico 4: Temperatura
         const tempChart = new Chart(document.getElementById('tempChart').getContext('2d'), {
