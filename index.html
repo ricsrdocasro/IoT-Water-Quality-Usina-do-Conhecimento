@@ -218,28 +218,27 @@
         });
 
         // Gráfico 3: Oxigênio Dissolvido (OD)
-        const doChart = new Chart(document.getElementById('doChart').getContext('2d'), {
-            type: 'line',
-            data: { 
-                datasets: [{ 
-                    label: 'Oxigênio (mg/L)', 
-                    data: [], 
-                    borderColor: 'rgba(75, 192, 192, 1)', 
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                    borderWidth: 2, 
-                    fill: false 
-                }] 
-            },
-            options: { 
+        const doChart = new Chart(document.getElementById('doChart').getContext('2d'), { 
+			type: 'line', 
+			data: { 
+				datasets: [{ 
+					label: 'Oxigênio (mg/L)', 
+					data: [], 
+					borderColor: 'rgba(75, 192, 192, 1)', 
+					backgroundColor: 'rgba(75, 192, 192, 0.2)', 
+					borderWidth: 2, 
+					fill: false 
+				}] 
+			}, 
+			options: { 
 				scales: { 
 					y: { 
-						min: 0,
-						max: 10, 
+					min: 0, 
+					max: 10 
 						} 
-						}
-				createChartOptions('Oxigênio (mg/L)')	
-						}
-			        });
+						} 
+					} 
+				});
 
         // Gráfico 4: Temperatura
         const tempChart = new Chart(document.getElementById('tempChart').getContext('2d'), {
