@@ -222,7 +222,7 @@
 			type: 'line', 
 			data: { 
 				datasets: [{ 
-					label: 'Oxigênio (mg/L)', 
+					label: 'Oxigênio (%)', 
 					data: [], 
 					borderColor: 'rgba(75, 192, 192, 1)', 
 					backgroundColor: 'rgba(75, 192, 192, 0.2)', 
@@ -230,14 +230,14 @@
 					fill: false 
 				}] 
 			}, 
-			options: { 
-				scales: { 
-					y: { 
-					min: 0, 
-					max: 10 
-						} 
-						} 
-					} 
+			options: createChartOptions('Óxigênio Dissolvido (%)')//{ 
+				//scales: { 
+				//	y: { 
+				//	min: 0, 
+				//	max: 100 
+				//		} 
+				//		} 
+				//	} 
 				});
 
         // Gráfico 4: Temperatura
@@ -299,7 +299,7 @@
                                 if (payload.hasOwnProperty('ph_value')) {
                                     phPoints.push({ x: time, y: payload.ph_value });
                                     orpPoints.push({ x: time, y: payload.orp_value });
-                                    doPoints.push({ x: time, y: payload.do_value });
+                                    doPoints.push({ x: time, y: payload.do_sat_value });
                                     tempPoints.push({ x: time, y: payload.temperature });
                                     pointsLoaded++;
                                 }
