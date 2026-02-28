@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
+<!-- saved from url=(0071)https://ricsrdocasro.github.io/IoT-Water-Quality-Usina-do-Conhecimento/ -->
+<html lang="pt-BR"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PISCI MONITOR</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="./PISCI MONITOR_files/chart.js.baixados"></script>
+    <script src="./PISCI MONITOR_files/chartjs-adapter-date-fns"></script>
     
     <style>
         /* --- ESQUEMA DE CORES (PRETO, BRANCO, AMARELO) --- */
@@ -108,35 +108,50 @@
 <body>
 
     <header>
-        <img id="logo" src="usina_logo.png" alt="Usina do Conhecimento Logo">
-        <h1>Monitoramento de Sensores (Últimas 24h)</h1>
+        <img id="logo" src="./PISCI MONITOR_files/usina_logo.png" alt="Usina do Conhecimento Logo">
+        <h1>Monitoramento da Qualidade da Água do Lago</h1>
     </header>
 
     <div class="controls">
         <button id="refresh-button">Atualizar Medidas</button>
         <div class="status-box">
             <span id="status-loading"></span>
-            <span id="status-update"></span>
+            <span id="status-update">Gráfico atualizado com 133 pontos. (Última verificação: 10:02:38)</span>
             <span id="status-error"></span>
         </div>
     </div>
+	
+<div style="margin: 20px 0;">
+    <label for="intervalo">Intervalo rápido:</label>
+    <select id="intervalo">
+        <option value="24">Últimas 24 horas</option>
+        <option value="36">Últimas 36 horas</option>
+        <option value="48" selected>Últimas 48 horas</option>
+    </select>
+</div>
+
+<label style="display:flex;align-items:center;gap:6px;margin:10px 0;">
+    <input type="checkbox" id="ignorarZeros" checked>
+    Ignorar valores zerados no gráfico
+</label>
+
 
     <main class="chart-grid">
         <div class="chart-container">
             <h2>Potencial Hidrogeniônico (pH)</h2>
-            <canvas id="phChart"></canvas>
+            <canvas id="phChart" width="626" height="313" style="display: block; box-sizing: border-box; height: 313.3px; width: 626.5px;"></canvas>
         </div>
         <div class="chart-container">
             <h2>Potencial de Oxi-Redução (ORP)</h2>
-            <canvas id="orpChart"></canvas>
+            <canvas id="orpChart" width="626" height="313" style="display: block; box-sizing: border-box; height: 313.3px; width: 626.5px;"></canvas>
         </div>
         <div class="chart-container">
             <h2>Oxigênio Dissolvido (OD)</h2>
-            <canvas id="doChart"></canvas>
+            <canvas id="doChart" width="626" height="313" style="display: block; box-sizing: border-box; height: 313.3px; width: 626.5px;"></canvas>
         </div>
         <div class="chart-container">
             <h2>Temperatura</h2>
-            <canvas id="tempChart"></canvas>
+            <canvas id="tempChart" width="626" height="313" style="display: block; box-sizing: border-box; height: 313.3px; width: 626.5px;"></canvas>
         </div>
     </main>
 
@@ -262,11 +277,15 @@
             statusLoading.textContent = "Carregando dados...";
             statusUpdate.textContent = "";
             statusError.textContent = "";
-            
-            const url = `https://${ttnCluster}/api/v3/as/applications/${appID}/devices/${deviceID}/packages/storage/uplink_message?last=24h`;
+            function montarURL() {
+				const horas = document.getElementById("intervalo").value;
+				return `https://${ttnCluster}/api/v3/as/applications/${appID}/devices/${deviceID}/packages/storage/uplink_message?last=${horas}h`;
+				}
+
+            //const url = `https://${ttnCluster}/api/v3/as/applications/${appID}/devices/${deviceID}/packages/storage/uplink_message?last=48h`;
 
             try {
-                const response = await fetch(url, {
+                const response = await fetch(montarURL(), {
                     method: 'GET',
                     headers: { 'Authorization': `Bearer ${ttnToken}`, 'Accept': 'text/event-stream' }
                 });
@@ -286,30 +305,52 @@
                 const lines = rawData.trim().split('\n');
                 let pointsLoaded = 0;
                 
-                for (const line of lines) {
-                    if (line.trim()) {
-                        try { // Adicionado bloco try-catch para lidar com JSONs malformados
-                            const jsonData = JSON.parse(line);
-                            const uplink = jsonData.result;
+                function valorValido(v) {
+    return v !== null && v !== undefined && v !== "" && v !== 0 && v !== "0";
+}
 
-                            if (uplink && uplink.uplink_message && uplink.uplink_message.decoded_payload) {
-                                const payload = uplink.uplink_message.decoded_payload;
-                                const time = new Date(uplink.received_at);
-                                
-                                if (payload.hasOwnProperty('ph_value')) {
-                                    phPoints.push({ x: time, y: payload.ph_value });
-                                    orpPoints.push({ x: time, y: payload.orp_value });
-                                    doPoints.push({ x: time, y: payload.do_sat_value });
-                                    tempPoints.push({ x: time, y: payload.temperature });
-                                    pointsLoaded++;
-                                }
-                            }
-                        } catch (jsonError) {
-                            console.warn("Erro ao fazer parse de linha JSON:", jsonError, "Linha:", line);
-                            // Continua para a próxima linha se houver um erro de parse
-                        }
-                    }
+function valorValido(v) {
+    return v !== null && v !== undefined && v !== "" && v !== "0" && v !== 0;
+}
+
+for (const line of lines) {
+    if (line.trim()) {
+        try {
+            const jsonData = JSON.parse(line);
+            const uplink = jsonData.result;
+
+            if (uplink && uplink.uplink_message && uplink.uplink_message.decoded_payload) {
+                const payload = uplink.uplink_message.decoded_payload;
+                const time = new Date(uplink.received_at);
+
+                const ignorarZeros = document.getElementById("ignorarZeros").checked;
+
+                // Se ignorarZeros = true → só adiciona se todos forem válidos
+                // Se ignorarZeros = false → adiciona tudo, mesmo zeros
+                const podeAdicionar =
+                    !ignorarZeros ||
+                    (
+                        valorValido(payload.ph_value) &&
+                        valorValido(payload.orp_value) &&
+                        valorValido(payload.do_sat_value) &&
+                        valorValido(payload.temperature)
+                    );
+
+                if (podeAdicionar) {
+                    phPoints.push({ x: time, y: Number(payload.ph_value) });
+                    orpPoints.push({ x: time, y: Number(payload.orp_value) });
+                    doPoints.push({ x: time, y: Number(payload.do_sat_value) });
+                    tempPoints.push({ x: time, y: Number(payload.temperature) });
+
+                    pointsLoaded++;
                 }
+            }
+        } catch (jsonError) {
+            console.warn("Erro ao fazer parse de linha JSON:", jsonError, "Linha:", line);
+        }
+    }
+}
+
                 
                 // Atualiza os 4 gráficos com seus respectivos dados
                 phChart.data.datasets[0].data = phPoints;
@@ -346,6 +387,13 @@
         
         // Continua atualizando a cada 60 segundos
         setInterval(fetchData, 60000); 
+		document.getElementById("intervalo").addEventListener("change", () => {
+    carregarDados(); // ou o nome da sua função que faz o fetch
+	document.getElementById("ignorarZeros").addEventListener("change", () => {
+    carregarDados(); // ou a função que reconstrói o gráfico
+})
+});
+
     </script>
-</body>
-</html>
+
+</body></html>
