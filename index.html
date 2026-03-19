@@ -135,6 +135,11 @@
     Ignorar valores zerados no gráfico
 </label>
 
+<label style="display:block; margin-top:10px;">
+    <input type="checkbox" id="usarCompensacaoPH">
+    Usar compensação de pH pela temperatura
+</label>
+
 
     <main class="chart-grid">
         <div class="chart-container">
@@ -175,6 +180,11 @@
         const statusLoading = document.getElementById('status-loading');
         const statusUpdate = document.getElementById('status-update');
         const statusError = document.getElementById('status-error');
+function corrigePH(pH_medido, temperaturaC) {
+    const slope = 0.168;   // variação de pH por °C (obtida da regressão)
+    const Tref = 25.0;     // temperatura de referência
+    return pH_medido - slope * (temperaturaC - Tref);
+}
 
         // --- Função Helper para criar Opções de Gráfico ---
         function createChartOptions(yAxisTitle) {
@@ -324,6 +334,13 @@ for (const line of lines) {
                 const time = new Date(uplink.received_at);
 
                 const ignorarZeros = document.getElementById("ignorarZeros").checked;
+				    const usarCompensacao = document.getElementById("usarCompensacaoPH").checked;
+
+    let phExibido = payload.ph_value;
+
+    if (usarCompensacao && valorValido(payload.temperature)) {
+        phExibido = corrigePH(payload.ph_value, payload.temperature);
+    }
 
                 // Se ignorarZeros = true → só adiciona se todos forem válidos
                 // Se ignorarZeros = false → adiciona tudo, mesmo zeros
@@ -337,7 +354,7 @@ for (const line of lines) {
                     );
 
                 if (podeAdicionar) {
-                    phPoints.push({ x: time, y: Number(payload.ph_value) });
+                    phPoints.push({ x: time, y: Number(phExibido) });
                     orpPoints.push({ x: time, y: Number(payload.orp_value) });
                     doPoints.push({ x: time, y: Number(payload.do_sat_value) });
                     tempPoints.push({ x: time, y: Number(payload.temperature) });
